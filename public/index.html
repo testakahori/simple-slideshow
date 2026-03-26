@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Slideshow</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Left Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <h1>Simple <span>Slideshow</span></h1>
+    <button class="btn-new" onclick="createSlideshow()">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      New Slideshow
+    </button>
+  </div>
+  <div class="sidebar-list" id="sidebarList">
+    <div class="sidebar-empty">スライドショーがまだありません<br>「New Slideshow」で作成できます</div>
+  </div>
+</aside>
+
+<!-- Main Content -->
+<main class="main" id="mainContent">
+  <div class="empty-state" id="emptyState">
+    <div class="empty-state-icon">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+        <rect x="3" y="6" width="26" height="20" rx="3" stroke="#bbb" stroke-width="2"/>
+        <path d="M3 11h26" stroke="#bbb" stroke-width="2"/>
+        <path d="M13 18l3-3 3 3 4-5" stroke="#bbb" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h2>スライドショーを選択</h2>
+    <p>左のサイドバーからスライドショーを選ぶか、<br>「New Slideshow」で新規作成してください</p>
+  </div>
+
+  <div id="editorView" style="display:none; flex-direction:column; height:100%; overflow:hidden;">
+    <!-- Header -->
+    <div class="editor-header">
+      <input type="text" class="title-input" id="titleInput" placeholder="スライドショーのタイトル" oninput="onTitleChange()">
+      <select class="ratio-select" id="ratioSelect" onchange="onRatioChange()">
+        <option value="16:9">16:9（HD）</option>
+        <option value="9:16">9:16（縦）</option>
+        <option value="4:3">4:3</option>
+        <option value="1:1">1:1（正方形）</option>
+        <option value="banner">バナー型（4:1）</option>
+        <option value="custom">カスタム</option>
+      </select>
+      <div id="customRatioInputs" style="display:none; gap:4px; align-items:center;">
+        <input type="number" id="customW" min="1" max="9999" value="1920" style="width:64px; border:1px solid var(--border); border-radius:6px; padding:7px 6px; font-size:13px; outline:none;" oninput="onCustomRatioInput()">
+        <span style="color:var(--text-secondary); font-weight:600;">×</span>
+        <input type="number" id="customH" min="1" max="9999" value="1080" style="width:64px; border:1px solid var(--border); border-radius:6px; padding:7px 6px; font-size:13px; outline:none;" oninput="onCustomRatioInput()">
+        <span style="color:var(--text-secondary); font-size:11px;">px</span>
+      </div>
+      <button class="btn btn-primary" onclick="saveSlideshow()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2 7l3.5 3.5L12 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        保存
+      </button>
+      <button class="btn btn-danger" onclick="confirmDelete()">削除</button>
+    </div>
+
+    <!-- OBS URL Bar -->
+    <div class="url-bar">
+      <span class="url-bar-label">OBS URL</span>
+      <div class="url-display" id="urlDisplay">—</div>
+      <button class="btn-copy" id="copyBtn" onclick="copyUrl()">コピー</button>
+      <span class="url-bar-note" id="urlNote">ブラウザソースにペーストしてください</span>
+    </div>
+
+    <!-- Settings Bar -->
+    <div class="settings-bar">
+      <div class="setting-group">
+        <span class="setting-label">トランジション</span>
+        <select class="setting-select" id="transitionSelect" onchange="onSettingChange()">
+          <option value="fade">フェード</option>
+          <option value="none">なし</option>
+          <option value="slide-left">スライド左</option>
+          <option value="slide-right">スライド右</option>
+          <option value="zoom">ズーム</option>
+        </select>
+      </div>
+      <div class="setting-group">
+        <span class="setting-label">表示時間(秒)</span>
+        <input type="number" class="setting-input-num" id="intervalInput" min="1" max="300" value="5" onchange="onSettingChange()">
+      </div>
+      <div class="setting-group">
+        <label class="setting-check">
+          <input type="checkbox" id="autoplayCheck" checked onchange="onSettingChange()">
+          自動再生
+        </label>
+      </div>
+      <div class="setting-group">
+        <label class="setting-check">
+          <input type="checkbox" id="loopCheck" checked onchange="onSettingChange()">
+          ループ
+        </label>
+      </div>
+    </div>
+
+    <!-- Editor Body -->
+    <div class="editor-body" id="editorBody">
+
+      <!-- Slides Section -->
+      <div class="slides-section">
+        <div class="slides-section-header">
+          <h3>スライド</h3>
+          <button class="btn btn-ghost" onclick="addSlide()">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+              <path d="M6.5 1v11M1 6.5h11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            スライドを追加
+          </button>
+        </div>
+        <div class="slides-grid" id="slidesGrid">
+          <div class="slides-empty">スライドがありません。「スライドを追加」ボタンで追加してください。</div>
+        </div>
+      </div>
+
+      <!-- Slide Editor -->
+      <div class="slide-editor" id="slideEditor" style="display:none;">
+        <div class="slide-editor-header">
+          <h3 id="slideEditorTitle">スライドを編集</h3>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <div class="setting-group">
+              <span class="setting-label" style="margin-bottom:0; margin-right:6px;">表示時間(秒)</span>
+              <input type="number" class="setting-input-num" id="slideDuration" min="1" max="300" value="5" onchange="onSlideDurationChange()">
+            </div>
+            <div class="setting-group">
+              <span class="setting-label" style="margin-bottom:0; margin-right:6px;">トランジション</span>
+              <select class="setting-select" id="slideTransition" onchange="onSlideTransitionChange()">
+                <option value="">デフォルト</option>
+                <option value="fade">フェード</option>
+                <option value="none">なし</option>
+                <option value="slide-left">スライド左</option>
+                <option value="slide-right">スライド右</option>
+                <option value="zoom">ズーム</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="slide-editor-body">
+          <div class="slide-editor-left">
+            <div class="slide-type-tabs" id="slideTypeTabs">
+              <button class="slide-type-tab active" onclick="setSlideType('image')">🖼 画像</button>
+              <button class="slide-type-tab" onclick="setSlideType('text')">📝 テキスト</button>
+              <button class="slide-type-tab" onclick="setSlideType('html')">💻 HTML</button>
+              <button class="slide-type-tab" onclick="setSlideType('color')">🎨 単色</button>
+            </div>
+            <div id="slideTypeFields"></div>
+          </div>
+          <div class="slide-editor-right">
+            <div class="field-label">プレビュー</div>
+            <div class="slide-preview" id="slidePreview">
+              <div class="slide-preview-inner" id="slidePreviewInner"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Delete Modal -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal">
+    <h2>スライドショーを削除</h2>
+    <p>このスライドショーを削除します。この操作は取り消せません。</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-danger" onclick="deleteSlideshow()">削除する</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden file input for image upload -->
+<input type="file" id="globalFileInput" accept="image/*" style="display:none" onchange="handleFileInputChange(this)">
+
+<script src="app.js"></script>
+</body>
+</html>

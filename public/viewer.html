@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Slideshow Viewer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+
+    #stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .slide-content {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .slide-content img {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ===== TRANSITIONS ===== */
+
+    /* Fade */
+    .trans-fade-enter {
+      opacity: 0;
+      z-index: 2;
+    }
+    .trans-fade-enter-active {
+      opacity: 1;
+      transition: opacity 0.8s ease;
+      z-index: 2;
+    }
+    .trans-fade-exit {
+      opacity: 1;
+      z-index: 1;
+    }
+    .trans-fade-exit-active {
+      opacity: 0;
+      transition: opacity 0.8s ease;
+      z-index: 1;
+    }
+
+    /* None */
+    .trans-none-enter { opacity: 0; z-index: 2; }
+    .trans-none-enter-active { opacity: 1; z-index: 2; }
+    .trans-none-exit { opacity: 0; z-index: 1; }
+
+    /* Slide Left */
+    .trans-slide-left-enter {
+      transform: translateX(100%);
+      z-index: 2;
+    }
+    .trans-slide-left-enter-active {
+      transform: translateX(0);
+      transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 2;
+    }
+    .trans-slide-left-exit {
+      transform: translateX(0);
+      z-index: 1;
+    }
+    .trans-slide-left-exit-active {
+      transform: translateX(-100%);
+      transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 1;
+    }
+
+    /* Slide Right */
+    .trans-slide-right-enter {
+      transform: translateX(-100%);
+      z-index: 2;
+    }
+    .trans-slide-right-enter-active {
+      transform: translateX(0);
+      transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 2;
+    }
+    .trans-slide-right-exit {
+      transform: translateX(0);
+      z-index: 1;
+    }
+    .trans-slide-right-exit-active {
+      transform: translateX(100%);
+      transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 1;
+    }
+
+    /* Zoom */
+    .trans-zoom-enter {
+      opacity: 0;
+      transform: scale(1.1);
+      z-index: 2;
+    }
+    .trans-zoom-enter-active {
+      opacity: 1;
+      transform: scale(1);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+      z-index: 2;
+    }
+    .trans-zoom-exit {
+      opacity: 1;
+      transform: scale(1);
+      z-index: 1;
+    }
+    .trans-zoom-exit-active {
+      opacity: 0;
+      transform: scale(0.9);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+      z-index: 1;
+    }
+
+    /* Error state */
+    #error {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #111;
+      color: #666;
+      font-family: sans-serif;
+      font-size: 16px;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+    }
+    #error.show { display: flex; }
+    #error h2 { color: #999; font-size: 20px; }
+  </style>
+</head>
+<body>
+
+<div id="stage"></div>
+<div id="error">
+  <h2>⚠ スライドショーが見つかりません</h2>
+  <p>URLを確認してください</p>
+</div>
+
+<script>
+  const slideshowId = location.pathname.split('/view/')[1];
+
+  let slideshow = null;
+  let currentIndex = 0;
+  let timer = null;
+  let slideA = null;
+  let slideB = null;
+  let useA = true;
+
+  async function loadSlideshow() {
+    try {
+      const res = await fetch(`/api/slideshows/${slideshowId}`);
+      if (!res.ok) throw new Error('Not found');
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  function buildSlideEl(slide, ss) {
+    const el = document.createElement('div');
+    el.className = 'slide';
+
+    const inner = document.createElement('div');
+    inner.className = 'slide-content';
+
+    const c = slide.content || {};
+
+    if (slide.type === 'image') {
+      inner.style.background = c.backgroundColor || '#000';
+      if (c.url) {
+        const img = document.createElement('img');
+        img.src = c.url;
+        img.style.objectFit = c.objectFit || 'cover';
+        inner.appendChild(img);
+      }
+    } else if (slide.type === 'text') {
+      inner.style.background = c.backgroundColor || '#000';
+      inner.style.padding = '5%';
+      const textEl = document.createElement('div');
+      textEl.style.cssText = `
+        color: ${c.color || '#fff'};
+        font-size: ${c.fontSize || 48}px;
+        font-family: ${c.fontFamily || 'sans-serif'};
+        text-align: ${c.textAlign || 'center'};
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-width: 100%;
+        line-height: 1.4;
+      `;
+      textEl.textContent = c.text || '';
+      inner.appendChild(textEl);
+    } else if (slide.type === 'html') {
+      inner.style.background = c.backgroundColor || '#000';
+      inner.style.width = '100%';
+      inner.style.height = '100%';
+      inner.innerHTML = c.html || '';
+    } else if (slide.type === 'color') {
+      inner.style.background = c.backgroundColor || '#000';
+      inner.style.width = '100%';
+      inner.style.height = '100%';
+      if (c.text) {
+        const textEl = document.createElement('div');
+        textEl.style.cssText = `
+          color: ${c.color || '#fff'};
+          font-size: 48px;
+          text-align: center;
+          padding: 5%;
+          white-space: pre-wrap;
+          word-break: break-word;
+          max-width: 100%;
+          font-family: sans-serif;
+        `;
+        textEl.textContent = c.text;
+        inner.appendChild(textEl);
+      }
+    }
+
+    el.appendChild(inner);
+    return el;
+  }
+
+  function getTransition(slide, ss) {
+    return slide.transition || (ss.settings && ss.settings.transition) || 'fade';
+  }
+
+  function getTransClass(trans) {
+    const map = {
+      'fade': 'trans-fade',
+      'none': 'trans-none',
+      'slide-left': 'trans-slide-left',
+      'slide-right': 'trans-slide-right',
+      'zoom': 'trans-zoom'
+    };
+    return map[trans] || 'trans-fade';
+  }
+
+  function transitionDuration(trans) {
+    if (trans === 'none') return 0;
+    return 800;
+  }
+
+  function getRatioCss(ratio) {
+    if (!ratio) return null;
+    if (ratio === 'banner') return '4 / 1';
+    if (ratio.includes('x')) {
+      const [w, h] = ratio.split('x').map(Number);
+      return w && h ? `${w} / ${h}` : null;
+    }
+    if (ratio.includes(':')) {
+      const [w, h] = ratio.split(':').map(Number);
+      return w && h ? `${w} / ${h}` : null;
+    }
+    return null;
+  }
+
+  async function showSlide(index, isFirst = false) {
+    if (!slideshow || !slideshow.slides || slideshow.slides.length === 0) return;
+
+    const slide = slideshow.slides[index];
+    const stage = document.getElementById('stage');
+    const trans = getTransition(slide, slideshow);
+    const transClass = getTransClass(trans);
+    const dur = transitionDuration(trans);
+
+    const newEl = buildSlideEl(slide, slideshow);
+
+    if (isFirst) {
+      newEl.style.zIndex = 1;
+      stage.appendChild(newEl);
+      slideA = newEl;
+      useA = true;
+    } else {
+      const oldEl = useA ? slideA : slideB;
+      const nextHolder = useA ? 'slideB' : 'slideA';
+
+      newEl.classList.add(`${transClass}-enter`);
+      stage.appendChild(newEl);
+
+      // Force reflow
+      newEl.offsetHeight;
+
+      newEl.classList.remove(`${transClass}-enter`);
+      newEl.classList.add(`${transClass}-enter-active`);
+
+      if (oldEl) {
+        oldEl.classList.add(`${transClass}-exit-active`);
+      }
+
+      await sleep(dur);
+
+      if (oldEl) {
+        oldEl.remove();
+      }
+      newEl.classList.remove(`${transClass}-enter-active`);
+
+      if (useA) { slideB = newEl; useA = false; }
+      else { slideA = newEl; useA = true; }
+    }
+
+    // Schedule next
+    scheduleNext(slide, index);
+  }
+
+  function scheduleNext(slide, index) {
+    clearTimeout(timer);
+    const ss = slideshow;
+    if (!ss || !ss.settings) return;
+    if (!ss.settings.autoplay) return;
+    if (ss.slides.length <= 1) return;
+
+    const duration = (slide.duration || ss.settings.interval || 5) * 1000;
+    timer = setTimeout(() => {
+      let next = index + 1;
+      if (next >= ss.slides.length) {
+        if (ss.settings.loop === false) return;
+        next = 0;
+      }
+      currentIndex = next;
+      showSlide(next);
+    }, duration);
+  }
+
+  function sleep(ms) {
+    return new Promise(r => setTimeout(r, ms));
+  }
+
+  async function init() {
+    if (!slideshowId) {
+      document.getElementById('error').classList.add('show');
+      return;
+    }
+
+    slideshow = await loadSlideshow();
+    if (!slideshow || !slideshow.slides || slideshow.slides.length === 0) {
+      document.getElementById('error').classList.add('show');
+      return;
+    }
+
+    currentIndex = 0;
+    await showSlide(0, true);
+
+    // Poll for updates every 30 seconds
+    setInterval(async () => {
+      const updated = await loadSlideshow();
+      if (updated) {
+        const oldId = slideshow.slides[currentIndex]?.id;
+        slideshow = updated;
+        // Find the same slide (by id) or reset to 0
+        const newIdx = updated.slides.findIndex(s => s.id === oldId);
+        if (newIdx === -1) {
+          currentIndex = 0;
+        } else {
+          currentIndex = newIdx;
+        }
+      }
+    }, 30000);
+  }
+
+  init();
+</script>
+</body>
+</html>
