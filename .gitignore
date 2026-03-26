@@ -1,4 +1,6 @@
 node_modules/
+node_bin/
+_node_tmp*/
 public/uploads/*
 !public/uploads/.gitkeep
 data/slideshows.json
